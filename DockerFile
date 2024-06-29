@@ -1,0 +1,80 @@
+FROM php:8.2-fpm
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    build-essential \
+    libfreetype6-dev \
+    libmcrypt-dev \
+    libgd-dev \
+    libonig-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libjpeg62-turbo-dev \
+    jpegoptim optipng pngquant gifsicle \
+    libonig-dev \
+    libxml2-dev \
+    libbz2-dev \
+    libgmp-dev \
+    libc-client-dev \
+    libkrb5-dev \
+    libzip-dev \
+    libpng-dev \
+    zip \
+    unzip \
+    gnupg2 \
+    cron \
+    logrotate \
+    vim \
+    supervisor
+
+RUN docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg
+
+RUN apt-get update \
+ && apt-get install --assume-yes --no-install-recommends --quiet \
+    build-essential \
+    libmagickwand-dev \
+ && apt-get clean all
+
+RUN docker-php-ext-install pdo pdo_mysql mbstring gd gmp zip sockets bcmath
+
+RUN docker-php-ext-configure pcntl --enable-pcntl \
+  && docker-php-ext-install \
+    pcntl
+
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Copy existing application directory contents
+COPY ./src /var/www/html
+
+# Create a user to match the host user UID/GID
+ARG UID
+ARG GID
+RUN groupadd -g ${GID} ho3in && \
+    useradd -u ${UID} -g ho3in -ms /bin/bash ho3in
+
+# Set permissions
+RUN chown -R ho3in:ho3in /var/www/html
+
+COPY ./supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+COPY ./supervisor/supervisord-programs.conf /etc/supervisor/conf.d/supervisord-programs.conf
+
+# Ensure /tmp/crond.pid and log files exist and set permissions
+RUN touch /tmp/crond.pid \
+    && chown -R ho3in:ho3in /tmp/crond.pid \
+    && mkdir -p /var/log/php-fpm \
+    && chown -R ho3in:ho3in /var/log/php-fpm \
+    && mkdir -p /var/log/laravel-artisan \
+    && chown -R ho3in:ho3in /var/log/laravel-artisan \
+    && mkdir -p /var/log/cron \
+    && chown -R ho3in:ho3in /var/log/cron
+
+# Set the user for subsequent commands
+USER ho3in
+
+CMD /usr/bin/supervisord -c /etc/supervisor/supervisord.conf

@@ -1,0 +1,23 @@
+version: '3'
+
+networks:
+  backend:
+  mysql:
+    external: true
+
+services:
+  php:
+    build:
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+      context: .
+      dockerfile: DockerFile
+    container_name: php
+    ports:
+      - "7000:7000"
+    volumes:
+      - ./src:/var/www/html
+    networks:
+      - backend
+      - mysql
